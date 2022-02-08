@@ -1,7 +1,6 @@
 package lancache
 
 import (
-	"log"
 	"testing"
 )
 
@@ -35,13 +34,50 @@ func TestParseLine(t *testing.T) {
 	if !entry.hit {
 		t.Error("Extracted HIT incorrectly (got false)")
 	}
+	if entry.domain != "edge.steam-dns.top.comcast.net" {
+		t.Error("Parsed domain incorrectly: " + entry.domain)
+	}
 }
 
 func TestParseFileFromScratch(t *testing.T) {
 	path := "testdata"
-	stats := ParseFileFromScratch(path)
-	log.Println(stats.HitEntries)
-	log.Println(stats.TotalEntries)
-	log.Println(stats.HitBytes)
-	log.Println(stats.TotalBytes)
+	stats := NewLogStatistics()
+	ParseFileFromOffset(path, &stats, 0)
+	if stats.Summary.Total != 7 {
+		t.Error("Expected 7 entries from parsefile")
+	}
+	if stats.Summary.Hits != 3 {
+		t.Error("Expected 3 hit entries from parsefile")
+	}
+	if stats.Summary.HitBytes != 2716352 {
+		t.Error("Expected 2716352 hitbytes from parsefile")
+	}
+	if stats.Summary.TotalBytes != 2749082 {
+		t.Error("Expected 2749082 total bytes from parsefile")
+	}
+
+	if len(stats.Requests) != 2 {
+		t.Error("Expected 2 ips in stats")
+	}
+	good := stats.Requests["1.2.3.4"].Summary
+	if good.TotalBytes != good.HitBytes {
+		t.Error("Hit and total bytes should be equal for 1.2.3.4")
+	}
+	if good.Hits != good.Total {
+		t.Error("Hit and total entries should be equal for 1.2.3.4")
+	}
+
+	bad := stats.Requests["4.3.2.1"].Summary
+	if bad.Hits != 0 {
+		t.Errorf("4.3.2.1 should have 0 hits but has %d", bad.Hits)
+	}
+	if bad.HitBytes != 0 {
+		t.Errorf("4.3.2.1 should have 0 hit bytes but has %d", bad.HitBytes)
+	}
+	if bad.TotalBytes != 32730 {
+		t.Errorf("4.3.2.1 should have 32730 total bytes but has %d", bad.TotalBytes)
+	}
+	if bad.Total != 4 {
+		t.Errorf("4.3.2.1 should have 4 total entries but has %d", bad.Total)
+	}
 }
