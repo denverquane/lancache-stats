@@ -37,7 +37,7 @@ func startServer(port int, path string) error {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, err)
 		} else if size > logBytes {
-			log.Printf("Log file has more bytes; starting processing from offset %d\n", logBytes)
+			log.Printf("Log file 6has more bytes; starting processing from offset %d\n", logBytes)
 			logBytes = lancache.ParseFileFromOffset(path, &currentStats, logBytes)
 		}
 		c.JSON(http.StatusCreated, currentStats)

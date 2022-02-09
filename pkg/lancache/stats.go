@@ -1,11 +1,16 @@
 package lancache
 
+type EntryAddable interface {
+	AddEntry(entry *LogEntry)
+}
+
 type Domains map[string]CacheRecord
 
 type LogStatistics struct {
 	Summary  CacheRecord               `json:"summary"`
 	Domains  Domains                   `json:"domains"`
 	Requests map[string]RequesterStats `json:"requests"`
+	entries  []*LogEntry
 }
 
 func NewLogStatistics() LogStatistics {
@@ -13,6 +18,7 @@ func NewLogStatistics() LogStatistics {
 		Summary:  EmptyCacheRecord(),
 		Domains:  make(Domains),
 		Requests: make(map[string]RequesterStats),
+		entries:  []*LogEntry{},
 	}
 }
 
@@ -32,6 +38,7 @@ func (s *LogStatistics) AddEntry(entry *LogEntry) {
 		i.AddEntry(entry)
 		s.Requests[entry.ip] = i
 	}
+	s.entries = append(s.entries, entry)
 }
 
 type CacheRecord struct {
