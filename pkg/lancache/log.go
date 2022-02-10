@@ -21,18 +21,14 @@ var lineRegex = regexp.MustCompile(`^\[` +
 	`\s.+\"(?P<hit>(?:HIT)|(?:MISS)|(?:-))\"\s\"(?P<dest>.+)\"\s\"`)
 
 type LogEntry struct {
-	client   string
-	source   string
-	dateTime time.Time
-	request  string
+	Client    string    `json:"client"`
+	Src       string    `json:"src"`
+	Timestamp time.Time `json:"timestamp"`
+	Request   string    `json:"request"`
 	//code     int64
-	byteSize uint64
-	hit      bool
-	dest     string
-}
-
-func (e *LogEntry) GetDateTime() time.Time {
-	return e.dateTime
+	Size uint64 `json:"size"`
+	Hit  bool   `json:"hit"`
+	Dest string `json:"dest"`
 }
 
 func ProcessTailAccessFile(tail *tail.Tail, col *LogCollection) {
@@ -76,13 +72,13 @@ func ParseLine(line string) *LogEntry {
 		return nil
 	}
 	return &LogEntry{
-		client:   arr[0][1],
-		source:   arr[0][2],
-		dateTime: t,
-		request:  arr[0][4],
-		byteSize: size,
-		hit:      hit == "HIT",
-		dest:     arr[0][7],
+		Client:    arr[0][1],
+		Src:       arr[0][2],
+		Timestamp: t,
+		Request:   arr[0][4],
+		Size:      size,
+		Hit:       hit == "HIT",
+		Dest:      arr[0][7],
 	}
 }
 

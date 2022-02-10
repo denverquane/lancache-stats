@@ -14,30 +14,30 @@ func TestParseLine(t *testing.T) {
 		t.Error("Nil log entry")
 	}
 
-	if entry.client != "steam" {
-		t.Error("Extracted client incorrectly: " + entry.client)
+	if entry.Client != "steam" {
+		t.Error("Extracted client incorrectly: " + entry.Client)
 	}
-	if entry.source != "1.2.3.4" {
-		t.Error("Extracted IP incorrectly: " + entry.source)
+	if entry.Src != "1.2.3.4" {
+		t.Error("Extracted IP incorrectly: " + entry.Src)
 	}
-	y, m, d := entry.dateTime.Date()
+	y, m, d := entry.Timestamp.Date()
 	if y != 2022 || m != time.February || d != 6 {
 		t.Errorf("Incorrect date extracted")
 	}
-	if entry.dateTime.Hour() != 21 || entry.dateTime.Minute() != 6 || entry.dateTime.Second() != 20 {
+	if entry.Timestamp.Hour() != 21 || entry.Timestamp.Minute() != 6 || entry.Timestamp.Second() != 20 {
 		t.Error("Incorrect time extracted")
 	}
-	if entry.request != "GET /depot/792101/chunk/12dbb86a0da1552683ed58e3afbdbf0740fb9e24 HTTP/1.1" {
+	if entry.Request != "GET /depot/792101/chunk/12dbb86a0da1552683ed58e3afbdbf0740fb9e24 HTTP/1.1" {
 		t.Error("Incorrect request extracted")
 	}
-	if entry.byteSize != 1023472 {
-		t.Errorf("Extracted size incorrectly: %d", entry.byteSize)
+	if entry.Size != 1023472 {
+		t.Errorf("Extracted size incorrectly: %d", entry.Size)
 	}
-	if !entry.hit {
+	if !entry.Hit {
 		t.Error("Extracted HIT incorrectly (got false)")
 	}
-	if entry.dest != "edge.steam-dns.top.comcast.net" {
-		t.Error("Parsed domain incorrectly: " + entry.dest)
+	if entry.Dest != "edge.steam-dns.top.comcast.net" {
+		t.Error("Parsed domain incorrectly: " + entry.Dest)
 	}
 }
 
@@ -51,7 +51,7 @@ func TestParseFileFromScratch(t *testing.T) {
 
 	ProcessTailAccessFile(tail, &coll)
 
-	if len(coll.data) != 7 {
+	if len(coll.Logs) != 7 {
 		t.Error("Expected 7 entries from parsefile")
 	}
 	summ := coll.Summarize()
@@ -80,7 +80,7 @@ func TestParseDuplicate(t *testing.T) {
 
 	ProcessTailAccessFile(t1, &coll)
 	ProcessTailAccessFile(t2, &coll)
-	if len(coll.data) != 7 {
-		t.Errorf("Expected 7 entries from parsefile but got %d", len(coll.data))
+	if len(coll.Logs) != 7 {
+		t.Errorf("Expected 7 entries from parsefile but got %d", len(coll.Logs))
 	}
 }
