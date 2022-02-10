@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"github.com/denverquane/lancache-stats/pkg/lancache"
 	"github.com/gin-gonic/gin"
+	"github.com/hpcloud/tail"
 	"log"
 	"net/http"
 	"os"
+	"path"
+	"sync"
 )
 
 func main() {
@@ -24,24 +27,32 @@ func main() {
 	if _, err := os.Stat(*logPath); os.IsNotExist(err) {
 		log.Fatal(err)
 	}
-	log.Println(startServer(*port, *logPath))
+
+	log.Println(startServerAndTail(*port, *logPath))
 }
 
-func startServer(port int, path string) error {
-	currentStats := lancache.NewLogStatistics()
-	var logBytes int64
+func startServerAndTail(port int, logpath string) error {
+	stats := lancache.NewLogStatistics()
+	lock := sync.RWMutex{}
+
+	log.Println("Tailing access.log file for new changes")
+	t, err := tail.TailFile(path.Join(logpath, "access.log"), tail.Config{Follow: true, MustExist: true})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go lancache.ProcessTailAccessFile(t, &stats, &lock)
 
 	r := gin.Default()
 	r.GET("/stats", func(c *gin.Context) {
-		size, err := lancache.LogFileSize(path)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, err)
-		} else if size > logBytes {
-			log.Printf("Log file 6has more bytes; starting processing from offset %d\n", logBytes)
-			logBytes = lancache.ParseFileFromOffset(path, &currentStats, logBytes)
-		}
-		c.JSON(http.StatusCreated, currentStats)
+		lock.RLock()
+		c.JSON(http.StatusCreated, stats)
+		lock.RUnlock()
 	})
+	defer func() {
+		t.Stop()
+		t.Cleanup()
+	}()
 	// TODO endpoint to associate canonical names with IP addresses
 	// TODO load canonical name associations from file
 	// TODO endpoint for canonical name associations also writes to file

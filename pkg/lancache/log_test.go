@@ -1,19 +1,11 @@
 package lancache
 
 import (
+	"github.com/hpcloud/tail"
+	"path"
+	"sync"
 	"testing"
 )
-
-func TestOpenAccessFileReadOnly(t *testing.T) {
-	path := "testdata"
-	f, err := openAccessFileReadOnly(path)
-	if err != nil {
-		t.Error(err)
-	}
-	if f == nil {
-		t.Error("nil file")
-	}
-}
 
 func TestParseLine(t *testing.T) {
 	line := "[steam] 1.2.3.4 / - - - [06/Feb/2022:21:06:20 -0500] \"GET /depot/792101/chunk/12dbb86a0da1552683ed58e3afbdbf0740fb9e24 HTTP/1.1\" 200 1023472 \"-\" \"Valve/Steam HTTP Client 1.0\" \"HIT\" \"edge.steam-dns.top.comcast.net\" \"-\"\n"
@@ -40,9 +32,16 @@ func TestParseLine(t *testing.T) {
 }
 
 func TestParseFileFromScratch(t *testing.T) {
-	path := "testdata"
+	p := "testdata"
 	stats := NewLogStatistics()
-	ParseFileFromOffset(path, &stats, 0)
+	tail, err := tail.TailFile(path.Join(p, "access.log"), tail.Config{Follow: false, MustExist: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock := sync.RWMutex{}
+
+	ProcessTailAccessFile(tail, &stats, &lock)
+
 	if stats.Summary.Total != 7 {
 		t.Error("Expected 7 entries from parsefile")
 	}

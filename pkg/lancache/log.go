@@ -1,12 +1,11 @@
 package lancache
 
 import (
-	"bufio"
+	"github.com/hpcloud/tail"
 	"log"
-	"os"
-	"path"
 	"regexp"
 	"strconv"
+	"sync"
 )
 
 var lineRegex = regexp.MustCompile(`^\[(?P<source>.+)\]\s(?P<ip>[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3})\s.+\s[0-9]{3}\s(?P<size>[0-9]+)\s.+\"(?P<hit>(?:HIT)|(?:MISS)|(?:-))\"\s\"(?P<domain>.+)\"\s\"`)
@@ -21,36 +20,27 @@ type LogEntry struct {
 	domain   string
 }
 
-func openAccessFileReadOnly(logpath string) (*os.File, error) {
-	return os.OpenFile(path.Join(logpath, "access.log"), os.O_RDONLY, 0666)
-}
-
-func ParseFileFromOffset(logpath string, stats *LogStatistics, offset int64) int64 {
-	f, err := openAccessFileReadOnly(logpath)
-	if err != nil {
-		log.Println(err)
-		return -1
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	pos := offset
-	scanLines := func(data []byte, atEOF bool) (advance int, token []byte, err error) {
-		advance, token, err = bufio.ScanLines(data, atEOF)
-		pos += int64(advance)
-		return
-	}
-	scanner.Split(scanLines)
-	for scanner.Scan() {
-		entry := ParseLine(scanner.Text())
-		if entry != nil {
-			stats.AddEntry(entry)
+func ProcessTailAccessFile(tail *tail.Tail, stats *LogStatistics, lock *sync.RWMutex) {
+	for line := range tail.Lines {
+		if line.Err != nil {
+			log.Println(line.Err)
+		} else {
+			if !stats.AlreadyProcessed(line.Text) {
+				entry := ParseLine(line.Text)
+				if entry != nil {
+					lock.Lock()
+					stats.AddEntry(entry, line.Text)
+					lock.Unlock()
+				}
+			}
 		}
 	}
-	return pos
 }
 
 func ParseLine(line string) *LogEntry {
+	if line == "" {
+		return nil
+	}
 	arr := lineRegex.FindAllStringSubmatch(line, -1)
 	if len(arr) == 0 || len(arr[0]) != 6 {
 		log.Println("Unexpected length for parsed regex array; failed regex. Results:")
@@ -73,16 +63,4 @@ func ParseLine(line string) *LogEntry {
 		hit:      arr[0][4] == "HIT",
 		domain:   arr[0][5],
 	}
-}
-
-func LogFileSize(logpath string) (int64, error) {
-	f, err := openAccessFileReadOnly(logpath)
-	if err != nil {
-		return -1, err
-	}
-	fi, err := f.Stat()
-	if err != nil {
-		return -1, err
-	}
-	return fi.Size(), nil
 }

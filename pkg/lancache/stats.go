@@ -7,22 +7,27 @@ type EntryAddable interface {
 type Domains map[string]CacheRecord
 
 type LogStatistics struct {
-	Summary  CacheRecord               `json:"summary"`
-	Domains  Domains                   `json:"domains"`
-	Requests map[string]RequesterStats `json:"requests"`
-	entries  []*LogEntry
+	Summary      CacheRecord               `json:"summary"`
+	Domains      Domains                   `json:"domains"`
+	Requests     map[string]RequesterStats `json:"requests"`
+	rawStringMap map[string]struct{}
 }
 
 func NewLogStatistics() LogStatistics {
 	return LogStatistics{
-		Summary:  EmptyCacheRecord(),
-		Domains:  make(Domains),
-		Requests: make(map[string]RequesterStats),
-		entries:  []*LogEntry{},
+		Summary:      EmptyCacheRecord(),
+		Domains:      make(Domains),
+		Requests:     make(map[string]RequesterStats),
+		rawStringMap: map[string]struct{}{},
 	}
 }
 
-func (s *LogStatistics) AddEntry(entry *LogEntry) {
+func (s *LogStatistics) AlreadyProcessed(rawText string) bool {
+	_, ok := s.rawStringMap[rawText]
+	return ok
+}
+
+func (s *LogStatistics) AddEntry(entry *LogEntry, rawText string) {
 	s.Summary.AddEntry(entry)
 
 	if d, ok := s.Domains[entry.domain]; !ok {
@@ -38,7 +43,7 @@ func (s *LogStatistics) AddEntry(entry *LogEntry) {
 		i.AddEntry(entry)
 		s.Requests[entry.ip] = i
 	}
-	s.entries = append(s.entries, entry)
+	s.rawStringMap[rawText] = struct{}{}
 }
 
 type CacheRecord struct {
