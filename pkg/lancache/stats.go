@@ -1,49 +1,65 @@
 package lancache
 
-type EntryAddable interface {
-	AddEntry(entry *LogEntry)
+import "sync"
+
+type LogCollection struct {
+	data []*LogEntry
+	l    sync.RWMutex
 }
 
-type Domains map[string]CacheRecord
-
-type LogStatistics struct {
-	Summary      CacheRecord               `json:"summary"`
-	Domains      Domains                   `json:"domains"`
-	Requests     map[string]RequesterStats `json:"requests"`
-	rawStringMap map[string]struct{}
+func NewLogCollection() LogCollection {
+	return LogCollection{data: make([]*LogEntry, 0)}
 }
 
-func NewLogStatistics() LogStatistics {
-	return LogStatistics{
-		Summary:      EmptyCacheRecord(),
-		Domains:      make(Domains),
-		Requests:     make(map[string]RequesterStats),
-		rawStringMap: map[string]struct{}{},
+func (s *LogCollection) alreadyProcessed(entry LogEntry) bool {
+	s.l.RLock()
+	defer s.l.RUnlock()
+
+	if len(s.data) == 0 {
+		return false
 	}
-}
-
-func (s *LogStatistics) AlreadyProcessed(rawText string) bool {
-	_, ok := s.rawStringMap[rawText]
-	return ok
-}
-
-func (s *LogStatistics) AddEntry(entry *LogEntry, rawText string) {
-	s.Summary.AddEntry(entry)
-
-	if d, ok := s.Domains[entry.domain]; !ok {
-		s.Domains[entry.domain] = NewCacheRecord(entry)
+	// if the incoming entry is newer than the first entry, it's certifiably unique
+	if entry.dateTime.After(s.data[0].dateTime) {
+		return false
+	} else if entry.dateTime.Equal(s.data[0].dateTime) {
+		for _, v := range s.data {
+			if entry.dateTime.Equal(v.dateTime) {
+				if entry == *v {
+					return true
+				}
+				// the else case is one where the times match, but the lines are different
+			} else {
+				// we iterated and found an element where the times are unequal; short-circuit here
+				return false
+			}
+		}
+		return false
 	} else {
-		d.AddEntry(entry)
-		s.Domains[entry.domain] = d
+		// incoming entry is older than first entry; by definition we've processed it before
+		return true
 	}
+}
 
-	if i, ok := s.Requests[entry.ip]; !ok {
-		s.Requests[entry.ip] = NewIpStat(entry)
-	} else {
-		i.AddEntry(entry)
-		s.Requests[entry.ip] = i
+func (s *LogCollection) Prepend(entry *LogEntry) {
+	if !s.alreadyProcessed(*entry) {
+		s.l.Lock()
+		s.data = append([]*LogEntry{entry}, s.data...)
+		s.l.Unlock()
 	}
-	s.rawStringMap[rawText] = struct{}{}
+}
+
+func (s *LogCollection) Summarize() (c CacheRecord) {
+	s.l.RLock()
+	for _, v := range s.data {
+		c.Total++
+		c.TotalBytes += v.byteSize
+		if v.hit {
+			c.Hits++
+			c.HitBytes += v.byteSize
+		}
+	}
+	s.l.RUnlock()
+	return c
 }
 
 type CacheRecord struct {
@@ -51,57 +67,4 @@ type CacheRecord struct {
 	Total      uint64 `json:"total"`
 	HitBytes   uint64 `json:"hit_bytes"`
 	TotalBytes uint64 `json:"total_bytes"`
-}
-
-func (c *CacheRecord) AddEntry(entry *LogEntry) {
-	c.TotalBytes += uint64(entry.byteSize)
-	c.Total++
-	if entry.hit {
-		c.HitBytes += uint64(entry.byteSize)
-		c.Hits++
-	}
-}
-
-func EmptyCacheRecord() CacheRecord {
-	return CacheRecord{}
-}
-
-func NewCacheRecord(entry *LogEntry) CacheRecord {
-	c := CacheRecord{
-		HitBytes:   0,
-		TotalBytes: uint64(entry.byteSize),
-		Hits:       0,
-		Total:      1,
-	}
-	if entry.hit {
-		c.HitBytes = uint64(entry.byteSize)
-		c.Hits = 1
-	}
-	return c
-}
-
-type RequesterStats struct {
-	CanonicalName string      `json:"canonical_name"`
-	Summary       CacheRecord `json:"summary"`
-	Domains       Domains     `json:"domains"`
-}
-
-func NewIpStat(entry *LogEntry) RequesterStats {
-	domains := make(Domains)
-	domains[entry.domain] = NewCacheRecord(entry)
-	return RequesterStats{
-		CanonicalName: "",
-		Summary:       NewCacheRecord(entry),
-		Domains:       domains,
-	}
-}
-
-func (i *RequesterStats) AddEntry(entry *LogEntry) {
-	i.Summary.AddEntry(entry)
-	if d, dok := i.Domains[entry.domain]; !dok {
-		i.Domains[entry.domain] = NewCacheRecord(entry)
-	} else {
-		d.AddEntry(entry)
-		i.Domains[entry.domain] = d
-	}
 }

@@ -5,33 +5,44 @@ import (
 	"log"
 	"regexp"
 	"strconv"
-	"sync"
+	"time"
 )
 
-var lineRegex = regexp.MustCompile(`^\[(?P<source>.+)\]\s(?P<ip>[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3})\s.+\s[0-9]{3}\s(?P<size>[0-9]+)\s.+\"(?P<hit>(?:HIT)|(?:MISS)|(?:-))\"\s\"(?P<domain>.+)\"\s\"`)
+var lineRegex = regexp.MustCompile(`^\[` +
+	`(?P<client>.+)` +
+	`\]\s` +
+	`(?P<src>[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3})` +
+	`\s.+\s\[` +
+	`(?P<datetime>[0-9]{2}/[a-zA-Z]{3}/[0-9]{4}:.+)` +
+	`\]\s\"` +
+	`(?P<req>[A-Z]{3,7}\s.+)` +
+	`\"\s[0-9]{3}\s` +
+	`(?P<size>[0-9]+)` +
+	`\s.+\"(?P<hit>(?:HIT)|(?:MISS)|(?:-))\"\s\"(?P<dest>.+)\"\s\"`)
 
 type LogEntry struct {
-	source string
-	ip     string
-	//dateTime string
+	client   string
+	source   string
+	dateTime time.Time
+	request  string
 	//code     int64
-	byteSize int64
+	byteSize uint64
 	hit      bool
-	domain   string
+	dest     string
 }
 
-func ProcessTailAccessFile(tail *tail.Tail, stats *LogStatistics, lock *sync.RWMutex) {
+func (e *LogEntry) GetDateTime() time.Time {
+	return e.dateTime
+}
+
+func ProcessTailAccessFile(tail *tail.Tail, col *LogCollection) {
 	for line := range tail.Lines {
 		if line.Err != nil {
 			log.Println(line.Err)
 		} else {
-			if !stats.AlreadyProcessed(line.Text) {
-				entry := ParseLine(line.Text)
-				if entry != nil {
-					lock.Lock()
-					stats.AddEntry(entry, line.Text)
-					lock.Unlock()
-				}
+			entry := ParseLine(line.Text)
+			if entry != nil {
+				col.Prepend(entry)
 			}
 		}
 	}
@@ -42,25 +53,42 @@ func ParseLine(line string) *LogEntry {
 		return nil
 	}
 	arr := lineRegex.FindAllStringSubmatch(line, -1)
-	if len(arr) == 0 || len(arr[0]) != 6 {
+	if len(arr) == 0 || len(arr[0]) != 8 {
 		log.Println("Unexpected length for parsed regex array; failed regex. Results:")
 		log.Println(arr)
 		return nil
 	}
-	size, err := strconv.ParseInt(arr[0][3], 10, 64)
+	t, err := parseDateTime(arr[0][3])
+	if err != nil {
+		log.Println(err)
+	}
+	size, err := strconv.ParseUint(arr[0][5], 10, 64)
 	if err != nil {
 		log.Println(err)
 		return nil
+	} else if size == 0 {
+		log.Println("Not recording entry with bytesize 0")
+		return nil
 	}
+	hit := arr[0][6]
 	// healthchecks don't count
-	if arr[0][4] == "-" {
+	if hit == "-" {
 		return nil
 	}
 	return &LogEntry{
-		source:   arr[0][1],
-		ip:       arr[0][2],
+		client:   arr[0][1],
+		source:   arr[0][2],
+		dateTime: t,
+		request:  arr[0][4],
 		byteSize: size,
-		hit:      arr[0][4] == "HIT",
-		domain:   arr[0][5],
+		hit:      hit == "HIT",
+		dest:     arr[0][7],
 	}
+}
+
+// https://go.dev/src/time/format.go have to use these EXACT numbers for the layout
+const layout = "02/Jan/2006:15:04:05 -0700"
+
+func parseDateTime(s string) (time.Time, error) {
+	return time.Parse(layout, s)
 }

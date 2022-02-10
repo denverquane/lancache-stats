@@ -1,8 +1,6 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"github.com/denverquane/lancache-stats/pkg/lancache"
 	"github.com/gin-gonic/gin"
 	"github.com/hpcloud/tail"
@@ -10,30 +8,33 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"sync"
+)
+
+const (
+	DefaultPort    = "5000"
+	DefaultLogPath = "/data/logs"
 )
 
 func main() {
-	port := flag.Int("port", 5000, "Port on which to run HTTP stats server")
-	logPath := flag.String("log-path", "/data/logs", "Log path")
-	flag.Parse()
-	if logPath == nil {
-		log.Fatal("Nil logpath ptr")
+	port := os.Getenv("LANCACHE_STATS_PORT")
+	logPath := os.Getenv("LANCACHE_STATS_LOG_PATH")
+
+	if logPath == "" {
+		logPath = DefaultLogPath
 	}
-	if port == nil {
-		log.Fatal("Nil port ptr")
+	if port == "" {
+		port = DefaultPort
 	}
 
-	if _, err := os.Stat(*logPath); os.IsNotExist(err) {
+	if _, err := os.Stat(logPath); os.IsNotExist(err) {
 		log.Fatal(err)
 	}
 
-	log.Println(startServerAndTail(*port, *logPath))
+	log.Println(startServerAndTail(port, logPath))
 }
 
-func startServerAndTail(port int, logpath string) error {
-	stats := lancache.NewLogStatistics()
-	lock := sync.RWMutex{}
+func startServerAndTail(port, logpath string) error {
+	coll := lancache.NewLogCollection()
 
 	log.Println("Tailing access.log file for new changes")
 	t, err := tail.TailFile(path.Join(logpath, "access.log"), tail.Config{Follow: true, MustExist: true})
@@ -41,14 +42,13 @@ func startServerAndTail(port int, logpath string) error {
 		log.Fatal(err)
 	}
 
-	go lancache.ProcessTailAccessFile(t, &stats, &lock)
+	go lancache.ProcessTailAccessFile(t, &coll)
 
 	r := gin.Default()
-	r.GET("/stats", func(c *gin.Context) {
-		lock.RLock()
-		c.JSON(http.StatusCreated, stats)
-		lock.RUnlock()
+	r.GET("/summary", func(c *gin.Context) {
+		c.JSON(http.StatusOK, coll.Summarize())
 	})
+
 	defer func() {
 		t.Stop()
 		t.Cleanup()
@@ -58,5 +58,9 @@ func startServerAndTail(port int, logpath string) error {
 	// TODO endpoint for canonical name associations also writes to file
 
 	// TODO endpoint to reset all data (clear cached/offsets, also clear name association file)
-	return r.Run(fmt.Sprintf(":%d", port))
+	return r.Run(":" + port)
+}
+
+type HttpError struct {
+	Error string `json:"error"`
 }
