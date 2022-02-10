@@ -15,7 +15,7 @@ import (
 
 func main() {
 	port := flag.Int("port", 5000, "Port on which to run HTTP stats server")
-	logPath := flag.String("log-path", "", "Log path")
+	logPath := flag.String("log-path", "/data/logs", "Log path")
 	flag.Parse()
 	if logPath == nil {
 		log.Fatal("Nil logpath ptr")

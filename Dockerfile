@@ -33,4 +33,4 @@ COPY --from=builder /app /app
 EXPOSE 5000
 
 # Run the compiled binary.
-ENTRYPOINT ["./app --port 5000 --log-path /logs"]
+ENTRYPOINT ["./app"]
