@@ -19,9 +19,11 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: ${{ secrets.DOCKERHUB_REPOSITORY }}
+          flavor: |
+            latest=auto
           tags: |
             type=ref,event=branch
-            type=raw,value=latest,enable=${{ endsWith(github.ref, github.event.repository.default_branch) }}
+            type=ref,event=tag
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -44,5 +46,5 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/386
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.docker_meta.outputs.tags }}
-          labels: ${{ steps.docker_meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
