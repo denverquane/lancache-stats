@@ -16,7 +16,9 @@ var lineRegex = regexp.MustCompile(`^\[` +
 	`(?P<datetime>[0-9]{2}/[a-zA-Z]{3}/[0-9]{4}:.+)` +
 	`\]\s\"` +
 	`(?P<req>[A-Z]{3,7}\s.+)` +
-	`\"\s[0-9]{3}\s` +
+	`\"\s` +
+	`(?P<code>[0-9]{3})` +
+	`\s` +
 	`(?P<size>[0-9]+)` +
 	`\s.+\"(?P<hit>(?:HIT)|(?:MISS)|(?:-))\"\s\"(?P<dest>.+)\"\s\"`)
 
@@ -24,11 +26,12 @@ type LogEntry struct {
 	Client    string    `json:"client"`
 	Src       string    `json:"src"`
 	Timestamp time.Time `json:"timestamp"`
-	Request   string    `json:"request"`
-	//code     int64
-	Size uint64 `json:"size"`
-	Hit  bool   `json:"hit"`
-	Dest string `json:"dest"`
+	// can be broken up by HTTP type (GET), URL, and HTTP version
+	Request string `json:"request"`
+	Code    int64  `json:"code"`
+	Size    uint64 `json:"size"`
+	Hit     bool   `json:"hit"`
+	Dest    string `json:"dest"`
 }
 
 func ProcessTailAccessFile(tail *tail.Tail, col *LogCollection) {
@@ -49,7 +52,7 @@ func ParseLine(line string) *LogEntry {
 		return nil
 	}
 	arr := lineRegex.FindAllStringSubmatch(line, -1)
-	if len(arr) == 0 || len(arr[0]) != 8 {
+	if len(arr) == 0 || len(arr[0]) != 9 {
 		log.Println("Unexpected length for parsed regex array; failed regex. Results:")
 		log.Println(arr)
 		return nil
@@ -58,7 +61,12 @@ func ParseLine(line string) *LogEntry {
 	if err != nil {
 		log.Println(err)
 	}
-	size, err := strconv.ParseUint(arr[0][5], 10, 64)
+	code, err := strconv.ParseInt(arr[0][5], 10, 64)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	size, err := strconv.ParseUint(arr[0][6], 10, 64)
 	if err != nil {
 		log.Println(err)
 		return nil
@@ -66,7 +74,7 @@ func ParseLine(line string) *LogEntry {
 		log.Println("Not recording entry with bytesize 0")
 		return nil
 	}
-	hit := arr[0][6]
+	hit := arr[0][7]
 	// healthchecks don't count
 	if hit == "-" {
 		return nil
@@ -76,9 +84,10 @@ func ParseLine(line string) *LogEntry {
 		Src:       arr[0][2],
 		Timestamp: t,
 		Request:   arr[0][4],
+		Code:      code,
 		Size:      size,
 		Hit:       hit == "HIT",
-		Dest:      arr[0][7],
+		Dest:      arr[0][8],
 	}
 }
 

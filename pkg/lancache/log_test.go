@@ -30,6 +30,9 @@ func TestParseLine(t *testing.T) {
 	if entry.Request != "GET /depot/792101/chunk/12dbb86a0da1552683ed58e3afbdbf0740fb9e24 HTTP/1.1" {
 		t.Error("Incorrect request extracted")
 	}
+	if entry.Code != 200 {
+		t.Errorf("Extracted code incorrectly: %d", entry.Code)
+	}
 	if entry.Size != 1023472 {
 		t.Errorf("Extracted size incorrectly: %d", entry.Size)
 	}
