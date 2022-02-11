@@ -14,44 +14,21 @@ func NewLogCollection() LogCollection {
 	return LogCollection{Logs: make([]*LogEntry, 0)}
 }
 
-// TODO test the complexity here to ensure it's actually necessary. Will a regular equality check be faster?
 func (s *LogCollection) alreadyProcessed(entry LogEntry) bool {
-	s.l.RLock()
-	defer s.l.RUnlock()
-
-	if len(s.Logs) == 0 {
-		return false
-	}
-	// if the incoming entry is newer than the first entry, it's certifiably unique
-	if entry.Timestamp.After(s.Logs[0].Timestamp) {
-		return false
-
-		// when logs come it at identical times
-	} else if entry.Timestamp.Equal(s.Logs[0].Timestamp) {
-		for _, v := range s.Logs {
-			if entry.Timestamp.Equal(v.Timestamp) {
-				// an identical element exists already
-				if entry == *v {
-					return true
-				}
-			} else {
-				// we iterated and found an element where the times are unequal; short-circuit here
-				return false
-			}
+	for _, v := range s.Logs {
+		if entry.Equals(v) {
+			return true
 		}
-		return false
-	} else {
-		// incoming entry is older than first entry; by definition we've processed it before
-		return true
 	}
+	return false
 }
 
 func (s *LogCollection) Prepend(entry *LogEntry) {
+	s.l.Lock()
 	if !s.alreadyProcessed(*entry) {
-		s.l.Lock()
 		s.Logs = append([]*LogEntry{entry}, s.Logs...)
-		s.l.Unlock()
 	}
+	s.l.Unlock()
 }
 
 type LogSummary struct {

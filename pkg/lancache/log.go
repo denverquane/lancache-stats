@@ -34,6 +34,17 @@ type LogEntry struct {
 	Dest    string `json:"dest"`
 }
 
+func (e1 *LogEntry) Equals(e2 *LogEntry) bool {
+	return e1.Client == e2.Client &&
+		e1.Src == e2.Src &&
+		e1.Timestamp == e2.Timestamp &&
+		e1.Request == e2.Request &&
+		e1.Code == e2.Code &&
+		e1.Size == e2.Size &&
+		e1.Hit == e2.Hit &&
+		e1.Dest == e2.Dest
+}
+
 func ProcessTailAccessFile(tail *tail.Tail, col *LogCollection) {
 	for line := range tail.Lines {
 		if line.Err != nil {
