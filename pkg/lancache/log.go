@@ -37,7 +37,7 @@ type LogEntry struct {
 func (e1 *LogEntry) Equals(e2 *LogEntry) bool {
 	return e1.Client == e2.Client &&
 		e1.Src == e2.Src &&
-		e1.Timestamp == e2.Timestamp &&
+		e1.Timestamp.Equal(e2.Timestamp) &&
 		e1.Request == e2.Request &&
 		e1.Code == e2.Code &&
 		e1.Size == e2.Size &&
